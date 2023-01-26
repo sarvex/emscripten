@@ -9649,6 +9649,7 @@ NODEFS is no longer included by default; build with -lnodefs.js
   def test_promise_await_sync(self):
     self.do_core_test('test_promise_await_sync.c')
 
+
 # Generate tests for everything
 def make_run(name, emcc_args, settings=None, env=None,
              require_v8=False, v8_args=None,
