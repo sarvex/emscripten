@@ -1333,14 +1333,15 @@ class libprintf_long_double(libc):
 
 
 class libwasm_workers(MTLibrary):
+  name = 'libwasm_workers'
+  includes = ['system/lib/libc']
+
   def __init__(self, **kwargs):
     self.debug = kwargs.pop('debug')
     super().__init__(**kwargs)
 
-  name = 'libwasm_workers'
-
   def get_cflags(self):
-    cflags = get_base_cflags() + ['-D_DEBUG' if self.debug else '-Oz']
+    cflags = super().get_cflags() + ['-D_DEBUG' if self.debug else '-Oz']
     if self.debug:
       # library_wasm_worker.c contains an assert that a nonnull paramater
       # is no NULL, which llvm now warns is redundant/tautological.
