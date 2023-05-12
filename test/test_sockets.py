@@ -84,7 +84,7 @@ class WebsockifyServerHarness():
       clean_processes(self.processes)
       raise Exception('[Websockify failed to start up in a timely manner]')
 
-    print('[Websockify on process %s]' % str(self.processes[-2:]))
+    print(f'[Websockify on process {str(self.processes[-2:])}]')
     return self
 
   def __exit__(self, *args, **kwargs):
@@ -136,7 +136,7 @@ class BackgroundServerProcess():
     self.args = args
 
   def __enter__(self):
-    print('Running background server: ' + str(self.args))
+    print(f'Running background server: {str(self.args)}')
     process = Popen(self.args)
     self.processes.append(process)
     return self
@@ -226,14 +226,14 @@ class sockets(BrowserCore):
       self.skipTest('requires native clang')
     sockets_include = '-I' + test_file('sockets')
 
-    # generate a large string literal to use as our message
-    message = ''
-    for i in range(256 * 256 * 2):
-      message += str(chr(ord('a') + (i % 26)))
-
+    message = ''.join(chr(ord('a') + (i % 26)) for i in range(256 * 256 * 2))
     # re-write the client test with this literal (it's too big to pass via command line)
     src = read_file(test_file('sockets/test_sockets_echo_client.c'))
-    create_file('test_sockets_echo_bigdata.c', src.replace('#define MESSAGE "pingtothepong"', '#define MESSAGE "%s"' % message))
+    create_file(
+        'test_sockets_echo_bigdata.c',
+        src.replace('#define MESSAGE "pingtothepong"',
+                    f'#define MESSAGE "{message}"'),
+    )
 
     with harness_class(test_file('sockets/test_sockets_echo_server.c'), args, port) as harness:
       self.btest_exit('test_sockets_echo_bigdata.c', args=[sockets_include, '-DSOCKK=%d' % harness.listen_port] + args)

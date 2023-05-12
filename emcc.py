@@ -192,7 +192,7 @@ def save_intermediate_with_wasm(name, wasm_binary):
   if not DEBUG:
     return
   save_intermediate(name) # save the js
-  building.save_intermediate(wasm_binary, name + '.wasm')
+  building.save_intermediate(wasm_binary, f'{name}.wasm')
 
 
 def base64_encode(b):
@@ -358,7 +358,7 @@ def create_reproduce_file(name, args):
 def setup_environment_settings():
   # Environment setting based on user input
   environments = settings.ENVIRONMENT.split(',')
-  if any([x for x in environments if x not in VALID_ENVIRONMENTS]):
+  if any(x for x in environments if x not in VALID_ENVIRONMENTS):
     exit_with_error(f'Invalid environment specified in "ENVIRONMENT": {settings.ENVIRONMENT}. Should be one of: {",".join(VALID_ENVIRONMENTS)}')
 
   settings.ENVIRONMENT_MAY_BE_WEB = not settings.ENVIRONMENT or 'web' in environments
@@ -401,7 +401,8 @@ def expand_byte_size_suffixes(value):
   value = value.strip()
   match = re.match(r'^(\d+)\s*([kmgt]?b)?$', value, re.I)
   if not match:
-    exit_with_error("invalid byte size `%s`.  Valid suffixes are: kb, mb, gb, tb" % value)
+    exit_with_error(
+        f"invalid byte size `{value}`.  Valid suffixes are: kb, mb, gb, tb")
   value, suffix = match.groups()
   value = int(value)
   if suffix:
@@ -441,7 +442,7 @@ def apply_user_settings():
     if value and value[0] == '@':
       filename = strip_prefix(value, '@')
       if not os.path.exists(filename):
-        exit_with_error('%s: file not found parsing argument: %s=%s' % (filename, key, value))
+        exit_with_error(f'{filename}: file not found parsing argument: {key}={value}')
       value = read_file(filename).strip()
     else:
       value = value.replace('\\', '\\\\')
@@ -572,7 +573,7 @@ def filter_link_flags(flags, using_lld):
     if using_lld:
       for flag, takes_arg in UNSUPPORTED_LLD_FLAGS.items():
         # lld allows various flags to have either a single -foo or double --foo
-        if f.startswith(flag) or f.startswith('-' + flag):
+        if f.startswith(flag) or f.startswith(f'-{flag}'):
           diagnostics.warning('linkflags', 'ignoring unsupported linker flag: `%s`', f)
           # Skip the next argument if this linker flag takes and argument and that
           # argument was not specified as a separately (i.e. it was specified as
@@ -678,14 +679,16 @@ def get_binaryen_passes():
       passes += ['--pass-arg=asyncify-verbose']
     if settings.ASYNCIFY_IGNORE_INDIRECT:
       passes += ['--pass-arg=asyncify-ignore-indirect']
-    passes += ['--pass-arg=asyncify-imports@%s' % ','.join(settings.ASYNCIFY_IMPORTS)]
+    passes += [
+        f"--pass-arg=asyncify-imports@{','.join(settings.ASYNCIFY_IMPORTS)}"
+    ]
 
     # shell escaping can be confusing; try to emit useful warnings
     def check_human_readable_list(items):
       for item in items:
         if item.count('(') != item.count(')'):
           logger.warning('emcc: ASYNCIFY list contains an item without balanced parentheses ("(", ")"):')
-          logger.warning('   ' + item)
+          logger.warning(f'   {item}')
           logger.warning('This may indicate improper escaping that led to splitting inside your names.')
           logger.warning('Try using a response file. e.g: -sASYNCIFY_ONLY=@funcs.txt. The format is a simple')
           logger.warning('text file, one line per function.')
@@ -693,17 +696,19 @@ def get_binaryen_passes():
 
     if settings.ASYNCIFY_REMOVE:
       check_human_readable_list(settings.ASYNCIFY_REMOVE)
-      passes += ['--pass-arg=asyncify-removelist@%s' % ','.join(settings.ASYNCIFY_REMOVE)]
+      passes += [
+          f"--pass-arg=asyncify-removelist@{','.join(settings.ASYNCIFY_REMOVE)}"
+      ]
     if settings.ASYNCIFY_ADD:
       check_human_readable_list(settings.ASYNCIFY_ADD)
-      passes += ['--pass-arg=asyncify-addlist@%s' % ','.join(settings.ASYNCIFY_ADD)]
+      passes += [f"--pass-arg=asyncify-addlist@{','.join(settings.ASYNCIFY_ADD)}"]
     if settings.ASYNCIFY_ONLY:
       check_human_readable_list(settings.ASYNCIFY_ONLY)
-      passes += ['--pass-arg=asyncify-onlylist@%s' % ','.join(settings.ASYNCIFY_ONLY)]
+      passes += [f"--pass-arg=asyncify-onlylist@{','.join(settings.ASYNCIFY_ONLY)}"]
   elif settings.ASYNCIFY == 2:
     passes += ['--jspi']
-    passes += ['--pass-arg=jspi-imports@%s' % ','.join(settings.ASYNCIFY_IMPORTS)]
-    passes += ['--pass-arg=jspi-exports@%s' % ','.join(settings.ASYNCIFY_EXPORTS)]
+    passes += [f"--pass-arg=jspi-imports@{','.join(settings.ASYNCIFY_IMPORTS)}"]
+    passes += [f"--pass-arg=jspi-exports@{','.join(settings.ASYNCIFY_EXPORTS)}"]
     if settings.SPLIT_MODULE:
       passes += ['--pass-arg=jspi-split-module']
 
@@ -727,7 +732,7 @@ def get_binaryen_passes():
     # BINARYEN_EXTRA_PASSES is comma-separated, and we support both '-'-prefixed and
     # unprefixed pass names
     extras = settings.BINARYEN_EXTRA_PASSES.split(',')
-    passes += [('--' + p) if p[0] != '-' else p for p in extras if p]
+    passes += [f'--{p}' if p[0] != '-' else p for p in extras if p]
 
   return passes
 
@@ -743,10 +748,10 @@ def make_js_executable(script):
     # Using -S (--split-string) here means that arguments to the executable are
     # correctly parsed.  We don't do this by default because old versions of env
     # don't support -S.
-    cmd = '/usr/bin/env -S ' + shared.shlex_join(cmd)
+    cmd = f'/usr/bin/env -S {shared.shlex_join(cmd)}'
   else:
     cmd = shared.shlex_join(cmd)
-  logger.debug('adding `#!` to JavaScript file: %s' % cmd)
+  logger.debug(f'adding `#!` to JavaScript file: {cmd}')
   # add shebang
   with open(script, 'w') as f:
     f.write('#!%s\n' % cmd)
@@ -758,12 +763,15 @@ def make_js_executable(script):
 
 
 def do_split_module(wasm_file, options):
-  os.rename(wasm_file, wasm_file + '.orig')
+  os.rename(wasm_file, f'{wasm_file}.orig')
   args = ['--instrument']
   if options.requested_debug:
     # Tell wasm-split to preserve function names.
     args += ['-g']
-  building.run_binaryen_command('wasm-split', wasm_file + '.orig', outfile=wasm_file, args=args)
+  building.run_binaryen_command('wasm-split',
+                                f'{wasm_file}.orig',
+                                outfile=wasm_file,
+                                args=args)
 
 
 def is_dash_s_for_emcc(args, i):
@@ -830,7 +838,7 @@ def process_dynamic_libs(dylibs, lib_dirs):
   dylibs += extras
   for dylib in dylibs:
     exports = webassembly.get_exports(dylib)
-    exports = set(e.name for e in exports)
+    exports = {e.name for e in exports}
     settings.SIDE_MODULE_EXPORTS.extend(sorted(exports))
 
     imports = webassembly.get_imports(dylib)
@@ -840,7 +848,7 @@ def process_dynamic_libs(dylibs, lib_dirs):
     # TODO(sbc): Integrate with metadata.invokeFuncs that comes from the
     # main module to avoid creating new invoke functions at runtime.
     imports = set(imports)
-    imports = set(i for i in imports if not i.startswith('invoke_'))
+    imports = {i for i in imports if not i.startswith('invoke_')}
     strong_imports = sorted(imports.difference(exports))
     logger.debug('Adding symbols requirements from `%s`: %s', dylib, imports)
 
@@ -864,37 +872,36 @@ def unmangle_symbols_from_cmdline(symbols):
 def parse_s_args(args):
   settings_changes = []
   for i in range(len(args)):
-    if args[i].startswith('-s'):
-      if is_dash_s_for_emcc(args, i):
-        if args[i] == '-s':
-          key = args[i + 1]
-          args[i + 1] = ''
-        else:
-          key = strip_prefix(args[i], '-s')
-        args[i] = ''
+    if args[i].startswith('-s') and is_dash_s_for_emcc(args, i):
+      if args[i] == '-s':
+        key = args[i + 1]
+        args[i + 1] = ''
+      else:
+        key = strip_prefix(args[i], '-s')
+      args[i] = ''
 
-        # If not = is specified default to 1
-        if '=' not in key:
-          key += '=1'
+      # If not = is specified default to 1
+      if '=' not in key:
+        key += '=1'
 
-        # Special handling of browser version targets. A version -1 means that the specific version
-        # is not supported at all. Replace those with INT32_MAX to make it possible to compare e.g.
-        # #if MIN_FIREFOX_VERSION < 68
-        if re.match(r'MIN_.*_VERSION(=.*)?', key):
-          try:
-            if int(key.split('=')[1]) < 0:
-              key = key.split('=')[0] + '=0x7FFFFFFF'
-          except Exception:
-            pass
+      # Special handling of browser version targets. A version -1 means that the specific version
+      # is not supported at all. Replace those with INT32_MAX to make it possible to compare e.g.
+      # #if MIN_FIREFOX_VERSION < 68
+      if re.match(r'MIN_.*_VERSION(=.*)?', key):
+        try:
+          if int(key.split('=')[1]) < 0:
+            key = key.split('=')[0] + '=0x7FFFFFFF'
+        except Exception:
+          pass
 
-        settings_changes.append(key)
+      settings_changes.append(key)
 
   newargs = [a for a in args if a]
   return (settings_changes, newargs)
 
 
 def emsdk_cflags(user_args):
-  cflags = ['--sysroot=' + cache.get_sysroot(absolute=True)]
+  cflags = [f'--sysroot={cache.get_sysroot(absolute=True)}']
 
   def array_contains_any_of(hay, needles):
     for n in needles:
@@ -961,7 +968,7 @@ def get_clang_flags(user_args):
 
   if settings.LTO:
     if not any(a.startswith('-flto') for a in user_args):
-      flags.append('-flto=' + settings.LTO)
+      flags.append(f'-flto={settings.LTO}')
     # setjmp/longjmp handling using Wasm EH
     # For non-LTO, '-mllvm -wasm-enable-eh' added in
     # building.llvm_backend_args() sets this feature in clang. But in LTO, the
@@ -1087,14 +1094,13 @@ def move_file(src, dst):
 def get_subresource_location(path, data_uri=None):
   if data_uri is None:
     data_uri = settings.SINGLE_FILE
-  if data_uri:
-    # if the path does not exist, then there is no data to encode
-    if not os.path.exists(path):
-      return ''
-    data = base64.b64encode(utils.read_binary(path))
-    return 'data:application/octet-stream;base64,' + data.decode('ascii')
-  else:
+  if not data_uri:
     return os.path.basename(path)
+  # if the path does not exist, then there is no data to encode
+  if not os.path.exists(path):
+    return ''
+  data = base64.b64encode(utils.read_binary(path))
+  return 'data:application/octet-stream;base64,' + data.decode('ascii')
 
 
 @ToolchainProfiler.profile_block('package_files')
@@ -1123,7 +1129,7 @@ def package_files(options, target):
     if settings.MEMORY64:
       file_args += ['--wasm64']
     object_file = in_temp('embedded_files.o')
-    file_args += ['--obj-output=' + object_file]
+    file_args += [f'--obj-output={object_file}']
     rtn.append(object_file)
 
   cmd = [shared.FILE_PACKAGER, shared.replace_suffix(target, '.data')] + file_args
@@ -1146,11 +1152,7 @@ run_via_emxx = False
 # Main run() function
 #
 def run(args):
-  if run_via_emxx:
-    clang = shared.CLANG_CXX
-  else:
-    clang = shared.CLANG_CC
-
+  clang = shared.CLANG_CXX if run_via_emxx else shared.CLANG_CC
   # Special case the handling of `-v` because it has a special/different meaning
   # when used with no other arguments.  In particular, we must handle this early
   # on, before we inject EMCC_CFLAGS.  This is because tools like cmake and
@@ -1161,10 +1163,7 @@ def run(args):
     print(version_string(), file=sys.stderr)
     return shared.check_call([clang, '-v'] + get_target_flags(), check=False).returncode
 
-  # Additional compiler flags that we treat as if they were passed to us on the
-  # commandline
-  EMCC_CFLAGS = os.environ.get('EMCC_CFLAGS')
-  if EMCC_CFLAGS:
+  if EMCC_CFLAGS := os.environ.get('EMCC_CFLAGS'):
     args += shlex.split(EMCC_CFLAGS)
 
   if DEBUG:
@@ -1222,9 +1221,7 @@ There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR P
     args = [x for x in args if x != '--cflags']
     with misc_temp_files.get_file(suffix='.o') as temp_target:
       input_file = 'hello_world.c'
-      compiler = shared.EMCC
-      if run_via_emxx:
-        compiler = shared.EMXX
+      compiler = shared.EMXX if run_via_emxx else shared.EMCC
       cmd = [compiler, utils.path_from_root('test', input_file), '-v', '-c', '-o', temp_target] + args
       proc = run_process(cmd, stderr=PIPE, check=False)
       if proc.returncode != 0:
@@ -1283,9 +1280,15 @@ There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR P
   if state.mode != Mode.COMPILE_AND_LINK:
     logger.debug('stopping after compile phase')
     for flag in state.link_flags:
-      diagnostics.warning('unused-command-line-argument', "argument unused during compilation: '%s'" % flag[1])
+      diagnostics.warning(
+          'unused-command-line-argument',
+          f"argument unused during compilation: '{flag[1]}'",
+      )
     for f in linker_inputs:
-      diagnostics.warning('unused-command-line-argument', "%s: linker input file unused because linking not done" % f[1])
+      diagnostics.warning(
+          'unused-command-line-argument',
+          f"{f[1]}: linker input file unused because linking not done",
+      )
 
     return 0
 
@@ -1310,13 +1313,11 @@ There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR P
     logger.debug('stopping after linking to object file')
     return 0
 
-  js_syms = {}
   if not settings.SIDE_MODULE or settings.ASYNCIFY:
     js_info = get_js_sym_info()
-    if not settings.SIDE_MODULE:
-      js_syms = js_info['deps']
-    if settings.ASYNCIFY:
-      settings.ASYNCIFY_IMPORTS += ['env.' + x for x in js_info['asyncFuncs']]
+  js_syms = js_info['deps'] if not settings.SIDE_MODULE else {}
+  if settings.ASYNCIFY:
+    settings.ASYNCIFY_IMPORTS += [f'env.{x}' for x in js_info['asyncFuncs']]
 
   phase_calculate_system_libraries(state, linker_arguments, newargs)
 
@@ -1407,10 +1408,7 @@ def phase_parse_arguments(state):
     key, value = normalize_boolean_setting(key, value)
     user_settings[key] = value
 
-  # STRICT is used when applying settings so it needs to be applied first before
-  # calling `apply_user_settings`.
-  strict_cmdline = user_settings.get('STRICT')
-  if strict_cmdline:
+  if strict_cmdline := user_settings.get('STRICT'):
     settings.STRICT = int(strict_cmdline)
 
   # Apply user -jsD settings

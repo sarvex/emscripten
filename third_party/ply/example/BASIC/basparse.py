@@ -44,7 +44,7 @@ def p_program_error(p):
 def p_statement(p):
     '''statement : INTEGER command NEWLINE'''
     if isinstance(p[2],str):
-        print("%s %s %s" % (p[2],"AT LINE", p[1]))
+        print(f"{p[2]} AT LINE {p[1]}")
         p[0] = None
         p.parser.error = 1
     else:
@@ -68,7 +68,7 @@ def p_statement_blank(p):
 
 def p_statement_bad(p):
     '''statement : INTEGER error NEWLINE'''
-    print("MALFORMED STATEMENT AT LINE %s" % p[1])
+    print(f"MALFORMED STATEMENT AT LINE {p[1]}")
     p[0] = None
     p.parser.error = 1
 
@@ -124,10 +124,7 @@ def p_optend(p):
     '''optend : COMMA 
               | SEMI
               |'''
-    if len(p)  == 2:
-         p[0] = p[1]
-    else:
-         p[0] = None
+    p[0] = p[1] if len(p)  == 2 else None
 
 #### PRINT statement with no arguments
 
@@ -182,10 +179,7 @@ def p_command_for_bad_step(p):
 def p_optstep(p):
     '''optstep : STEP expr
                | empty'''
-    if len(p) == 3:
-       p[0] = p[2]
-    else:
-       p[0] = None
+    p[0] = p[2] if len(p) == 3 else None
 
 #### NEXT statement
     
@@ -365,7 +359,7 @@ def p_number(p):
 def p_number_signed(p):
     '''number  : MINUS INTEGER
                | MINUS FLOAT'''
-    p[0] = eval("-"+p[2])
+    p[0] = eval(f"-{p[2]}")
 
 #### List of targets for a print statement
 #### Returns a list of tuples (label,expr)
@@ -406,8 +400,7 @@ bparser = yacc.yacc()
 def parse(data,debug=0):
     bparser.error = 0
     p = bparser.parse(data,debug=debug)
-    if bparser.error: return None
-    return p
+    return None if bparser.error else p
 
 
 

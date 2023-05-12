@@ -32,43 +32,48 @@ from tools.utils import delete_file, delete_dir
 
 
 def test_chunked_synchronous_xhr_server(support_byte_ranges, chunkSize, data, checksum, port):
+
+
+
   class ChunkedServerHandler(BaseHTTPRequestHandler):
-    def sendheaders(s, extra=None, length=None):
+    def sendheaders(self, extra=None, length=None):
       length = length or len(data)
-      s.send_response(200)
-      s.send_header("Content-Length", str(length))
-      s.send_header("Access-Control-Allow-Origin", "http://localhost:%s" % port)
-      s.send_header('Cross-Origin-Resource-Policy', 'cross-origin')
-      s.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
-      s.send_header("Access-Control-Expose-Headers", "Content-Length, Accept-Ranges")
-      s.send_header("Content-type", "application/octet-stream")
+      self.send_response(200)
+      self.send_header("Content-Length", str(length))
+      self.send_header("Access-Control-Allow-Origin", f"http://localhost:{port}")
+      self.send_header('Cross-Origin-Resource-Policy', 'cross-origin')
+      self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+      self.send_header("Access-Control-Expose-Headers",
+                       "Content-Length, Accept-Ranges")
+      self.send_header("Content-type", "application/octet-stream")
       if support_byte_ranges:
-        s.send_header("Accept-Ranges", "bytes")
+        self.send_header("Accept-Ranges", "bytes")
       if extra:
         for key, value in extra:
-          s.send_header(key, value)
-      s.end_headers()
+          self.send_header(key, value)
+      self.end_headers()
 
-    def do_HEAD(s):
-      s.sendheaders()
+    def do_HEAD(self):
+      self.sendheaders()
 
-    def do_OPTIONS(s):
-      s.sendheaders([("Access-Control-Allow-Headers", "Range")], 0)
+    def do_OPTIONS(self):
+      self.sendheaders([("Access-Control-Allow-Headers", "Range")], 0)
 
-    def do_GET(s):
-      if s.path == '/':
-        s.sendheaders()
+    def do_GET(self):
+      if self.path == '/':
+        self.sendheaders()
       elif not support_byte_ranges:
-        s.sendheaders()
-        s.wfile.write(data)
+        self.sendheaders()
+        self.wfile.write(data)
       else:
-        start, end = s.headers.get("range").split("=")[1].split("-")
+        start, end = self.headers.get("range").split("=")[1].split("-")
         start = int(start)
         end = int(end)
         end = min(len(data) - 1, end)
         length = end - start + 1
-        s.sendheaders([], length)
-        s.wfile.write(data[start:end + 1])
+        self.sendheaders([], length)
+        self.wfile.write(data[start:end + 1])
+
 
   # CORS preflight makes OPTIONS requests which we need to account for.
   expectedConns = 22
@@ -154,9 +159,7 @@ def is_chrome():
 
 
 def no_chrome(note='chrome is not supported'):
-  if is_chrome():
-    return unittest.skip(note)
-  return lambda f: f
+  return unittest.skip(note) if is_chrome() else (lambda f: f)
 
 
 def is_firefox():
@@ -164,9 +167,7 @@ def is_firefox():
 
 
 def no_firefox(note='firefox is not supported'):
-  if is_firefox():
-    return unittest.skip(note)
-  return lambda f: f
+  return unittest.skip(note) if is_firefox() else (lambda f: f)
 
 
 def is_jspi(args):
@@ -274,11 +275,11 @@ class browser(BrowserCore):
     # use relative paths when calling emcc, because file:// URIs can only load
     # sourceContent when the maps are relative paths
     delete_file(html_file)
-    delete_file(html_file + '.map')
+    delete_file(f'{html_file}.map')
     self.compile_btest(['src.cpp', '-o', 'src.html', '-gsource-map'])
     self.assertExists(html_file)
     self.assertExists('src.wasm.map')
-    webbrowser.open_new('file://' + html_file)
+    webbrowser.open_new(f'file://{html_file}')
     print('''
 If manually bisecting:
   Check that you see src.cpp among the page sources.
@@ -303,7 +304,7 @@ If manually bisecting:
       path = path.replace('\\', '\\\\').replace('"', '\\"') # Escape tricky path name for use inside a C string.
       # TODO: change this when wasmfs supports relative paths.
       if self.get_setting('WASMFS'):
-        path = "/" + path
+        path = f"/{path}"
       create_file('main.cpp', r'''
         #include <assert.h>
         #include <stdio.h>
@@ -323,23 +324,23 @@ If manually bisecting:
         ''' % path)
 
     test_cases = [
-      # (source preload-file string, file on target FS to load)
-      ("somefile.txt", "somefile.txt"),
-      (".somefile.txt@somefile.txt", "somefile.txt"),
-      ("./somefile.txt", "somefile.txt"),
-      ("somefile.txt@file.txt", "file.txt"),
-      ("./somefile.txt@file.txt", "file.txt"),
-      ("./somefile.txt@./file.txt", "file.txt"),
-      ("somefile.txt@/file.txt", "file.txt"),
-      ("somefile.txt@/", "somefile.txt"),
-      (absolute_src_path + "@file.txt", "file.txt"),
-      (absolute_src_path + "@/file.txt", "file.txt"),
-      (absolute_src_path + "@/", "somefile.txt"),
-      ("somefile.txt@/directory/file.txt", "/directory/file.txt"),
-      ("somefile.txt@/directory/file.txt", "directory/file.txt"),
-      (absolute_src_path + "@/directory/file.txt", "directory/file.txt"),
-      ("some@@file.txt@other.txt", "other.txt"),
-      ("some@@file.txt@some@@otherfile.txt", "some@otherfile.txt")]
+        ("somefile.txt", "somefile.txt"),
+        (".somefile.txt@somefile.txt", "somefile.txt"),
+        ("./somefile.txt", "somefile.txt"),
+        ("somefile.txt@file.txt", "file.txt"),
+        ("./somefile.txt@file.txt", "file.txt"),
+        ("./somefile.txt@./file.txt", "file.txt"),
+        ("somefile.txt@/file.txt", "file.txt"),
+        ("somefile.txt@/", "somefile.txt"),
+        (f"{absolute_src_path}@file.txt", "file.txt"),
+        (f"{absolute_src_path}@/file.txt", "file.txt"),
+        (f"{absolute_src_path}@/", "somefile.txt"),
+        ("somefile.txt@/directory/file.txt", "/directory/file.txt"),
+        ("somefile.txt@/directory/file.txt", "directory/file.txt"),
+        (f"{absolute_src_path}@/directory/file.txt", "directory/file.txt"),
+        ("some@@file.txt@other.txt", "other.txt"),
+        ("some@@file.txt@some@@otherfile.txt", "some@otherfile.txt"),
+    ]
 
     for srcpath, dstpath in test_cases:
       print('Testing', srcpath, dstpath)
@@ -404,14 +405,49 @@ If manually bisecting:
       ''' % (path1, path2, nonexistingpath))
 
     test_cases = [
-      # (source directory to embed, file1 on target FS to load, file2 on target FS to load, name of a file that *shouldn't* exist on VFS)
-      ("assets", "assets/sub/asset1/file1.txt", "assets/sub/asset2/file2.txt", "assets/sub/asset1/.git/shouldnt_be_embedded.txt"),
-      ("assets/", "assets/sub/asset1/file1.txt", "assets/sub/asset2/file2.txt", "assets/sub/asset1/.git/shouldnt_be_embedded.txt"),
-      ("assets@/", "/sub/asset1/file1.txt", "/sub/asset2/file2.txt", "/sub/asset1/.git/shouldnt_be_embedded.txt"),
-      ("assets/@/", "/sub/asset1/file1.txt", "/sub/asset2/file2.txt", "/sub/asset1/.git/shouldnt_be_embedded.txt"),
-      ("assets@./", "/sub/asset1/file1.txt", "/sub/asset2/file2.txt", "/sub/asset1/.git/shouldnt_be_embedded.txt"),
-      (absolute_assets_src_path + "@/", "/sub/asset1/file1.txt", "/sub/asset2/file2.txt", "/sub/asset1/.git/shouldnt_be_embedded.txt"),
-      (absolute_assets_src_path + "@/assets", "/assets/sub/asset1/file1.txt", "/assets/sub/asset2/file2.txt", "assets/sub/asset1/.git/shouldnt_be_embedded.txt")]
+        (
+            "assets",
+            "assets/sub/asset1/file1.txt",
+            "assets/sub/asset2/file2.txt",
+            "assets/sub/asset1/.git/shouldnt_be_embedded.txt",
+        ),
+        (
+            "assets/",
+            "assets/sub/asset1/file1.txt",
+            "assets/sub/asset2/file2.txt",
+            "assets/sub/asset1/.git/shouldnt_be_embedded.txt",
+        ),
+        (
+            "assets@/",
+            "/sub/asset1/file1.txt",
+            "/sub/asset2/file2.txt",
+            "/sub/asset1/.git/shouldnt_be_embedded.txt",
+        ),
+        (
+            "assets/@/",
+            "/sub/asset1/file1.txt",
+            "/sub/asset2/file2.txt",
+            "/sub/asset1/.git/shouldnt_be_embedded.txt",
+        ),
+        (
+            "assets@./",
+            "/sub/asset1/file1.txt",
+            "/sub/asset2/file2.txt",
+            "/sub/asset1/.git/shouldnt_be_embedded.txt",
+        ),
+        (
+            f"{absolute_assets_src_path}@/",
+            "/sub/asset1/file1.txt",
+            "/sub/asset2/file2.txt",
+            "/sub/asset1/.git/shouldnt_be_embedded.txt",
+        ),
+        (
+            f"{absolute_assets_src_path}@/assets",
+            "/assets/sub/asset1/file1.txt",
+            "/assets/sub/asset2/file2.txt",
+            "assets/sub/asset1/.git/shouldnt_be_embedded.txt",
+        ),
+    ]
 
     for test in test_cases:
       (srcpath, dstpath1, dstpath2, nonexistingpath) = test
@@ -462,13 +498,13 @@ If manually bisecting:
     self.set_setting('EXIT_RUNTIME')
     tricky_part = '\'' if WINDOWS else '\' and \"' # On Windows, files/directories may not contain a double quote character. On non-Windowses they can, so test that.
 
-    d = 'dir with ' + tricky_part
+    d = f'dir with {tricky_part}'
     abs_d = os.path.abspath(d)
     ensure_dir(abs_d)
-    txt = 'file with ' + tricky_part + '.txt'
+    txt = f'file with {tricky_part}.txt'
     create_file(os.path.join(d, txt), 'load me right before')
 
-    cpp = os.path.join(d, 'file with ' + tricky_part + '.cpp')
+    cpp = os.path.join(d, f'file with {tricky_part}.cpp')
     create_file(cpp, r'''
       #include <assert.h>
       #include <stdio.h>
@@ -486,11 +522,19 @@ If manually bisecting:
       }
     ''' % (txt.replace('\'', '\\\'').replace('\"', '\\"')))
 
-    data_file = os.path.join(abs_d, 'file with ' + tricky_part + '.data')
-    data_js_file = os.path.join(abs_d, 'file with ' + tricky_part + '.js')
+    data_file = os.path.join(abs_d, f'file with {tricky_part}.data')
+    data_js_file = os.path.join(abs_d, f'file with {tricky_part}.js')
     abs_txt = os.path.join(abs_d, txt)
-    self.run_process([FILE_PACKAGER, data_file, '--use-preload-cache', '--indexedDB-name=testdb', '--preload', abs_txt + '@' + txt, '--js-output=' + data_js_file])
-    page_file = os.path.join(d, 'file with ' + tricky_part + '.html')
+    self.run_process([
+        FILE_PACKAGER,
+        data_file,
+        '--use-preload-cache',
+        '--indexedDB-name=testdb',
+        '--preload',
+        f'{abs_txt}@{txt}',
+        f'--js-output={data_js_file}',
+    ])
+    page_file = os.path.join(d, f'file with {tricky_part}.html')
     abs_page_file = os.path.abspath(page_file)
     self.compile_btest([cpp, '--pre-js', data_js_file, '-o', abs_page_file, '-sFORCE_FILESYSTEM'], reporting=Reporting.JS_ONLY)
     self.run_browser(page_file, '/report_result?exit:0')
@@ -766,10 +810,19 @@ If manually bisecting:
     for args in [[], ['--memory-init-file=1', '-sWASM=0']]:
       for dest, dirname, basename in [('screenshot.jpg', '/', 'screenshot.jpg'),
                                       ('screenshot.jpg@/assets/screenshot.jpg', '/assets', 'screenshot.jpg')]:
-        self.btest_exit(src, args=args + [
-          '-O2', '-lSDL', '-lGL',
-          '--preload-file', dest, '-DSCREENSHOT_DIRNAME="' + dirname + '"', '-DSCREENSHOT_BASENAME="' + basename + '"', '--use-preload-plugins'
-        ])
+        self.btest_exit(
+            src,
+            args=(args + [
+                '-O2',
+                '-lSDL',
+                '-lGL',
+                '--preload-file',
+                dest,
+                f'-DSCREENSHOT_DIRNAME="{dirname}"',
+                f'-DSCREENSHOT_BASENAME="{basename}"',
+                '--use-preload-plugins',
+            ]),
+        )
       return
 
   @also_with_wasmfs
@@ -1433,7 +1486,8 @@ keydown(100);keyup(100); // trigger the end
     ensure_dir('subdir')
     create_file('file1.txt', '0123456789' * (1024 * 128))
     create_file('subdir/file2.txt', '1234567890' * (1024 * 128))
-    random_data = bytearray(random.randint(0, 255) for x in range(1024 * 128 * 10 + 1))
+    random_data = bytearray(
+        random.randint(0, 255) for _ in range(1024 * 128 * 10 + 1))
     random_data[17] = ord('X')
     create_file('file3.txt', random_data, binary=True)
 
@@ -1746,7 +1800,7 @@ keydown(100);keyup(100); // trigger the end
           raise e
 
     try:
-      self.run_browser(main, '/report_result?' + str(checksum))
+      self.run_browser(main, f'/report_result?{str(checksum)}')
     finally:
       server.terminate()
     # Avoid race condition on cleanup, wait a bit so that processes have released file locks so that test tearDown won't
@@ -2860,7 +2914,22 @@ Module["preRun"].push(function () {
       create_file('pre.js', 'Module.locateFile = function(x) { return "sub/" + x };')
       self.run_process([FILE_PACKAGER, 'test.data', '--preload', 'data.txt'], stdout=open('data.js', 'w'))
       # put pre.js first, then the file packager data, so locateFile is there for the file loading code
-      self.compile_btest(['src.cpp', '-O2', '-g', '--pre-js', 'pre.js', '--pre-js', 'data.js', '-o', 'page.html', '-sFORCE_FILESYSTEM', '-sWASM=' + str(wasm)] + args, reporting=Reporting.JS_ONLY)
+      self.compile_btest(
+          [
+              'src.cpp',
+              '-O2',
+              '-g',
+              '--pre-js',
+              'pre.js',
+              '--pre-js',
+              'data.js',
+              '-o',
+              'page.html',
+              '-sFORCE_FILESYSTEM',
+              f'-sWASM={str(wasm)}',
+          ] + args,
+          reporting=Reporting.JS_ONLY,
+      )
       ensure_dir('sub')
       if wasm:
         shutil.move('page.wasm', Path('sub/page.wasm'))
@@ -2885,12 +2954,29 @@ Module["preRun"].push(function () {
       ''')
 
       def in_html(expected):
-        self.compile_btest(['src.cpp', '-O2', '-g', '--shell-file', 'shell.html', '--pre-js', 'data.js', '-o', 'page.html', '-sSAFE_HEAP', '-sASSERTIONS', '-sFORCE_FILESYSTEM', '-sWASM=' + str(wasm)] + args, reporting=Reporting.JS_ONLY)
+        self.compile_btest(
+            [
+                'src.cpp',
+                '-O2',
+                '-g',
+                '--shell-file',
+                'shell.html',
+                '--pre-js',
+                'data.js',
+                '-o',
+                'page.html',
+                '-sSAFE_HEAP',
+                '-sASSERTIONS',
+                '-sFORCE_FILESYSTEM',
+                f'-sWASM={str(wasm)}',
+            ] + args,
+            reporting=Reporting.JS_ONLY,
+        )
         if wasm:
           shutil.move('page.wasm', Path('sub/page.wasm'))
         else:
           shutil.move('page.html.mem', Path('sub/page.html.mem'))
-        self.run_browser('page.html', '/report_result?exit:' + expected)
+        self.run_browser('page.html', f'/report_result?exit:{expected}')
 
       in_html('0')
 
@@ -2934,13 +3020,20 @@ Module["preRun"].push(function () {
     for args in [[], ['--memory-init-file=1', '-sWASM=0']]:
       for dest, dirname, basename in [('screenshot.jpg', '/', 'screenshot.jpg'),
                                       ('screenshot.jpg@/assets/screenshot.jpg', '/assets', 'screenshot.jpg')]:
-        self.btest_exit('browser/test_sdl2_image.c', 600, args=args + [
-          '-O2',
-          '--preload-file', dest,
-          '-DSCREENSHOT_DIRNAME="' + dirname + '"',
-          '-DSCREENSHOT_BASENAME="' + basename + '"',
-          '-sUSE_SDL=2', '-sUSE_SDL_IMAGE=2', '--use-preload-plugins'
-        ])
+        self.btest_exit(
+            'browser/test_sdl2_image.c',
+            600,
+            args=(args + [
+                '-O2',
+                '--preload-file',
+                dest,
+                f'-DSCREENSHOT_DIRNAME="{dirname}"',
+                f'-DSCREENSHOT_BASENAME="{basename}"',
+                '-sUSE_SDL=2',
+                '-sUSE_SDL_IMAGE=2',
+                '--use-preload-plugins',
+            ]),
+        )
 
   @requires_graphics_hardware
   def test_sdl2_image_jpeg(self):
@@ -3320,15 +3413,19 @@ Module["preRun"].push(function () {
   @requires_sound_hardware
   def test_sdl2_mixer_music(self, formats, flags, music_name):
     shutil.copyfile(test_file('sounds', music_name), music_name)
-    self.btest_exit('browser/test_sdl2_mixer_music.c', args=[
-      '--preload-file', music_name,
-      '-DSOUND_PATH=' + json.dumps(music_name),
-      '-DFLAGS=' + flags,
-      '-sUSE_SDL=2',
-      '-sUSE_SDL_MIXER=2',
-      '-sSDL2_MIXER_FORMATS=' + json.dumps(formats),
-      '-sINITIAL_MEMORY=33554432'
-    ])
+    self.btest_exit(
+        'browser/test_sdl2_mixer_music.c',
+        args=[
+            '--preload-file',
+            music_name,
+            f'-DSOUND_PATH={json.dumps(music_name)}',
+            f'-DFLAGS={flags}',
+            '-sUSE_SDL=2',
+            '-sUSE_SDL_MIXER=2',
+            f'-sSDL2_MIXER_FORMATS={json.dumps(formats)}',
+            '-sINITIAL_MEMORY=33554432',
+        ],
+    )
 
   @requires_graphics_hardware
   def test_cocos2d_hello(self):
@@ -3354,7 +3451,7 @@ Module["preRun"].push(function () {
 
     for opts in [0, 1, 2, 3]:
       print(opts)
-      self.btest_exit('browser/async.cpp', args=['-O' + str(opts), '-g2'] + args)
+      self.btest_exit('browser/async.cpp', args=[f'-O{str(opts)}', '-g2'] + args)
 
   def test_asyncify_tricky_function_sig(self):
     self.btest('browser/test_asyncify_tricky_function_sig.cpp', '85', args=['-sASYNCIFY_ONLY=[foo(char.const*?.int#),foo2(),main,__original_main]', '-sASYNCIFY'])
@@ -3372,12 +3469,24 @@ Module["preRun"].push(function () {
   def test_async_virtual(self):
     for opts in [0, 3]:
       print(opts)
-      self.btest_exit('browser/async_virtual.cpp', args=['-O' + str(opts), '-profiling', '-sASYNCIFY'])
+      self.btest_exit(
+          'browser/async_virtual.cpp',
+          args=[f'-O{str(opts)}', '-profiling', '-sASYNCIFY'],
+      )
 
   def test_async_virtual_2(self):
     for opts in [0, 3]:
       print(opts)
-      self.btest_exit('browser/async_virtual_2.cpp', args=['-O' + str(opts), '-sASSERTIONS', '-sSAFE_HEAP', '-profiling', '-sASYNCIFY'])
+      self.btest_exit(
+          'browser/async_virtual_2.cpp',
+          args=[
+              f'-O{str(opts)}',
+              '-sASSERTIONS',
+              '-sSAFE_HEAP',
+              '-profiling',
+              '-sASYNCIFY',
+          ],
+      )
 
   # Test async sleeps in the presence of invoke_* calls, which can happen with
   # longjmp or exceptions.
@@ -3391,7 +3500,8 @@ Module["preRun"].push(function () {
   def test_async_mainloop(self):
     for opts in [0, 3]:
       print(opts)
-      self.btest_exit('browser/async_mainloop.cpp', args=['-O' + str(opts), '-sASYNCIFY'])
+      self.btest_exit('browser/async_mainloop.cpp',
+                      args=[f'-O{str(opts)}', '-sASYNCIFY'])
 
   @requires_sound_hardware
   def test_sdl_audio_beep_sleep(self):
@@ -4121,10 +4231,20 @@ Module["preRun"].push(function () {
   @requires_threads
   def test_pthread_sbrk(self):
     for aborting_malloc in [0, 1]:
-      print('aborting malloc=' + str(aborting_malloc))
+      print(f'aborting malloc={str(aborting_malloc)}')
       # With aborting malloc = 1, test allocating memory in threads
       # With aborting malloc = 0, allocate so much memory in threads that some of the allocations fail.
-      self.btest_exit(test_file('pthread/test_pthread_sbrk.cpp'), args=['-O3', '-pthread', '-sPTHREAD_POOL_SIZE=8', '-sABORTING_MALLOC=' + str(aborting_malloc), '-DABORTING_MALLOC=' + str(aborting_malloc), '-sINITIAL_MEMORY=128MB'])
+      self.btest_exit(
+          test_file('pthread/test_pthread_sbrk.cpp'),
+          args=[
+              '-O3',
+              '-pthread',
+              '-sPTHREAD_POOL_SIZE=8',
+              f'-sABORTING_MALLOC={str(aborting_malloc)}',
+              f'-DABORTING_MALLOC={str(aborting_malloc)}',
+              '-sINITIAL_MEMORY=128MB',
+          ],
+      )
 
   # Test that -sABORTING_MALLOC=0 works in both pthreads and non-pthreads builds. (sbrk fails gracefully)
   @requires_threads
@@ -4227,7 +4347,18 @@ Module["preRun"].push(function () {
   @requires_threads
   @no_firefox('https://github.com/emscripten-core/emscripten/issues/15978')
   def test_pthread_lsan(self, name, args):
-    self.btest(test_file('pthread', name + '.cpp'), expected='1', args=['-fsanitize=leak', '-sINITIAL_MEMORY=256MB', '-pthread', '-sPROXY_TO_PTHREAD', '--pre-js', test_file('pthread', name + '.js')] + args)
+    self.btest(
+        test_file('pthread', f'{name}.cpp'),
+        expected='1',
+        args=[
+            '-fsanitize=leak',
+            '-sINITIAL_MEMORY=256MB',
+            '-pthread',
+            '-sPROXY_TO_PTHREAD',
+            '--pre-js',
+            test_file('pthread', f'{name}.js'),
+        ] + args,
+    )
 
   @parameterized({
     # Reusing the LSan test files for ASan.
@@ -4236,7 +4367,18 @@ Module["preRun"].push(function () {
   })
   @requires_threads
   def test_pthread_asan(self, name, args):
-    self.btest(test_file('pthread', name + '.cpp'), expected='1', args=['-fsanitize=address', '-sINITIAL_MEMORY=256MB', '-pthread', '-sPROXY_TO_PTHREAD', '--pre-js', test_file('pthread', name + '.js')] + args)
+    self.btest(
+        test_file('pthread', f'{name}.cpp'),
+        expected='1',
+        args=[
+            '-fsanitize=address',
+            '-sINITIAL_MEMORY=256MB',
+            '-pthread',
+            '-sPROXY_TO_PTHREAD',
+            '--pre-js',
+            test_file('pthread', f'{name}.js'),
+        ] + args,
+    )
 
   @requires_threads
   def test_pthread_asan_use_after_free(self):
@@ -4314,7 +4456,13 @@ Module["preRun"].push(function () {
   def test_vanilla_html_when_proxying(self):
     for opts in [0, 1, 2]:
       print(opts)
-      self.compile_btest([test_file('browser_test_hello_world.c'), '-o', 'test.js', '-O' + str(opts), '--proxy-to-worker'])
+      self.compile_btest([
+          test_file('browser_test_hello_world.c'),
+          '-o',
+          'test.js',
+          f'-O{str(opts)}',
+          '--proxy-to-worker',
+      ])
       create_file('test.html', '<script src="test.js"></script>')
       self.run_browser('test.html', '/report_result?0')
 
@@ -4322,7 +4470,7 @@ Module["preRun"].push(function () {
     # test the XHR for an asm.js mem init file being in flight already
     for o in [0, 1, 2]:
       print(o)
-      opts = ['-O' + str(o), '-sWASM=0']
+      opts = [f'-O{str(o)}', '-sWASM=0']
 
       print('plain html')
       self.compile_btest([test_file('in_flight_memfile_request.c'), '-o', 'test.js'] + opts)
@@ -4491,14 +4639,19 @@ Module["preRun"].push(function () {
   def test_webgl_draw_base_vertex_base_instance(self):
     for multiDraw in [0, 1]:
       for drawElements in [0, 1]:
-        self.btest('webgl_draw_base_vertex_base_instance_test.c', reference='webgl_draw_instanced_base_vertex_base_instance.png',
-                   args=['-lGL',
-                         '-sMAX_WEBGL_VERSION=2',
-                         '-sOFFSCREEN_FRAMEBUFFER',
-                         '-DMULTI_DRAW=' + str(multiDraw),
-                         '-DDRAW_ELEMENTS=' + str(drawElements),
-                         '-DEXPLICIT_SWAP=1',
-                         '-DWEBGL_CONTEXT_VERSION=2'])
+        self.btest(
+            'webgl_draw_base_vertex_base_instance_test.c',
+            reference='webgl_draw_instanced_base_vertex_base_instance.png',
+            args=[
+                '-lGL',
+                '-sMAX_WEBGL_VERSION=2',
+                '-sOFFSCREEN_FRAMEBUFFER',
+                f'-DMULTI_DRAW={str(multiDraw)}',
+                f'-DDRAW_ELEMENTS={str(drawElements)}',
+                '-DEXPLICIT_SWAP=1',
+                '-DWEBGL_CONTEXT_VERSION=2',
+            ],
+        )
 
   @requires_graphics_hardware
   def test_webgl_sample_query(self):
@@ -4525,7 +4678,7 @@ Module["preRun"].push(function () {
     for threads in [[], ['-pthread', '-sPROXY_TO_PTHREAD']]:
       for version in [[], ['-sFULL_ES3'], ['-sFULL_ES3']]:
         args = ['-lGL', '-sOFFSCREEN_FRAMEBUFFER', '-DEXPLICIT_SWAP=1'] + threads + version
-        print('with args: %s' % str(args))
+        print(f'with args: {str(args)}')
         self.btest_exit('webgl_draw_triangle.c', args=args)
 
   # Tests that VAOs can be used even if WebGL enableExtensionsByDefault is set to 0.
@@ -4578,7 +4731,7 @@ Module["preRun"].push(function () {
       # given the synchronous render loop here, asyncify is needed to see intermediate frames and
       # the gradual color change
       cmd += ['-sASYNCIFY', '-DASYNCIFY']
-    print(str(cmd))
+    print(cmd)
     self.btest_exit('gl_in_proxy_pthread.cpp', args=cmd)
 
   @parameterized({
@@ -4592,18 +4745,20 @@ Module["preRun"].push(function () {
     for args2 in [[], ['-DTEST_SYNC_BLOCKING_LOOP=1']]:
       for args3 in [[], ['-sOFFSCREENCANVAS_SUPPORT', '-sOFFSCREEN_FRAMEBUFFER']]:
         cmd = args + args2 + args3 + ['-pthread', '-lGL', '-sGL_DEBUG']
-        print(str(cmd))
+        print(cmd)
         self.btest_exit('resize_offscreencanvas_from_main_thread.cpp', args=cmd)
 
   @requires_graphics_hardware
   def test_webgl_simple_enable_extensions(self):
     for webgl_version in [1, 2]:
       for simple_enable_extensions in [0, 1]:
-        cmd = ['-DWEBGL_CONTEXT_VERSION=' + str(webgl_version),
-               '-DWEBGL_SIMPLE_ENABLE_EXTENSION=' + str(simple_enable_extensions),
-               '-sMAX_WEBGL_VERSION=2',
-               '-sGL_SUPPORT_AUTOMATIC_ENABLE_EXTENSIONS=' + str(simple_enable_extensions),
-               '-sGL_SUPPORT_SIMPLE_ENABLE_EXTENSIONS=' + str(simple_enable_extensions)]
+        cmd = [
+            f'-DWEBGL_CONTEXT_VERSION={str(webgl_version)}',
+            f'-DWEBGL_SIMPLE_ENABLE_EXTENSION={str(simple_enable_extensions)}',
+            '-sMAX_WEBGL_VERSION=2',
+            f'-sGL_SUPPORT_AUTOMATIC_ENABLE_EXTENSIONS={str(simple_enable_extensions)}',
+            f'-sGL_SUPPORT_SIMPLE_ENABLE_EXTENSIONS={str(simple_enable_extensions)}',
+        ]
         self.btest_exit('webgl2_simple_enable_extensions.c', args=cmd)
 
   @requires_graphics_hardware
@@ -5122,7 +5277,7 @@ Module["preRun"].push(function () {
     args = ['-sMINIMAL_RUNTIME=2']
     for wasm in [[], ['-sWASM=0', '--memory-init-file', '0'], ['-sWASM=0', '--memory-init-file', '1'], ['-sSINGLE_FILE'], ['-sWASM=0', '-sSINGLE_FILE']]:
       for modularize in [[], ['-sMODULARIZE']]:
-        print(str(args + wasm + modularize))
+        print(args + wasm + modularize)
         self.btest_exit('minimal_hello.c', args=args + wasm + modularize)
 
   # Tests that -sMINIMAL_RUNTIME works well in different build modes

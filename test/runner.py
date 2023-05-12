@@ -123,7 +123,7 @@ def get_all_tests(modules):
     for s in suites:
       if hasattr(m, s):
         tests = [t for t in dir(getattr(m, s)) if t.startswith('test_')]
-        all_tests += [s + '.' + t for t in tests]
+        all_tests += [f'{s}.{t}' for t in tests]
   return all_tests
 
 
@@ -136,9 +136,9 @@ def get_crossplatform_tests(modules):
     for s in suites:
       if hasattr(m, s):
         testclass = getattr(m, s)
-        for funcname in dir(testclass):
-          if hasattr(getattr(testclass, funcname), 'is_crossplatform_test'):
-            crossplatform_tests.append(s + '.' + funcname)
+        crossplatform_tests.extend(
+            f'{s}.{funcname}' for funcname in dir(testclass)
+            if hasattr(getattr(testclass, funcname), 'is_crossplatform_test'))
   return crossplatform_tests
 
 
@@ -150,13 +150,13 @@ def tests_with_expanded_wildcards(args, all_tests):
       if arg.startswith('skip:'):
         arg = arg[5:]
         matching_tests = fnmatch.filter(all_tests, arg)
-        new_args += ['skip:' + t for t in matching_tests]
+        new_args += [f'skip:{t}' for t in matching_tests]
       else:
         new_args += fnmatch.filter(all_tests, arg)
     else:
       new_args += [arg]
   if not new_args and args:
-    print('No tests found to run in set: ' + str(args))
+    print(f'No tests found to run in set: {str(args)}')
     sys.exit(1)
   return new_args
 
@@ -165,12 +165,11 @@ def skip_test(tests_to_skip, modules):
   suite_name, test_name = tests_to_skip.split('.')
   skipped = False
   for m in modules:
-    suite = getattr(m, suite_name, None)
-    if suite:
+    if suite := getattr(m, suite_name, None):
       setattr(suite, test_name, lambda s: s.skipTest("requested to be skipped"))
       skipped = True
       break
-  assert skipped, "Not able to skip test " + tests_to_skip
+  assert skipped, f"Not able to skip test {tests_to_skip}"
 
 
 def skip_requested_tests(args, modules):
@@ -179,7 +178,7 @@ def skip_requested_tests(args, modules):
     if arg.startswith('skip:'):
       which = arg.split('skip:')[1]
       os.environ['EMTEST_SKIP'] = os.environ['EMTEST_SKIP'] + ' ' + which
-      print('will skip "%s"' % which, file=sys.stderr)
+      print(f'will skip "{which}"', file=sys.stderr)
       skip_test(which, modules)
       args[i] = None
   return [a for a in args if a is not None]
@@ -226,16 +225,14 @@ def choose_random_tests(base, num_tests, relevant_modes):
   while len(chosen) < num_tests:
     test = random.choice(tests)
     mode = random.choice(relevant_modes)
-    new_test = mode + '.' + test
+    new_test = f'{mode}.{test}'
     before = len(chosen)
     chosen.add(new_test)
     if len(chosen) > before:
-      print('* ' + new_test)
-    else:
-      # we may have hit the limit
-      if len(chosen) == len(tests) * len(relevant_modes):
-        print('(all possible tests chosen! %d = %d*%d)' % (len(chosen), len(tests), len(relevant_modes)))
-        break
+      print(f'* {new_test}')
+    elif len(chosen) == len(tests) * len(relevant_modes):
+      print('(all possible tests chosen! %d = %d*%d)' % (len(chosen), len(tests), len(relevant_modes)))
+      break
   return list(chosen)
 
 
@@ -293,8 +290,7 @@ def load_test_suites(args, modules):
 def flattened_tests(loaded_tests):
   tests = []
   for subsuite in loaded_tests:
-    for test in subsuite:
-      tests.append(test)
+    tests.extend(iter(subsuite))
   return tests
 
 
@@ -323,15 +319,14 @@ def run_tests(options, suites):
     import xmlrunner # type: ignore
     testRunner = xmlrunner.XMLTestRunner(output=output, verbosity=2,
                                          failfast=options.failfast)
-    print('Writing XML test output to ' + os.path.abspath(output.name))
+    print(f'Writing XML test output to {os.path.abspath(output.name)}')
   else:
     testRunner = unittest.TextTestRunner(verbosity=2, failfast=options.failfast)
 
   for mod_name, suite in suites:
-    print('Running %s: (%s tests)' % (mod_name, suite.countTestCases()))
+    print(f'Running {mod_name}: ({suite.countTestCases()} tests)')
     res = testRunner.run(suite)
-    msg = ('%s: %s run, %s errors, %s failures, %s skipped' %
-           (mod_name, res.testsRun, len(res.errors), len(res.failures), len(res.skipped)))
+    msg = f'{mod_name}: {res.testsRun} run, {len(res.errors)} errors, {len(res.failures)} failures, {len(res.skipped)} skipped'
     num_failures += len(res.errors) + len(res.failures) + len(res.unexpectedSuccesses)
     resultMessages.append(msg)
 
@@ -340,7 +335,7 @@ def run_tests(options, suites):
     print()
     print('TEST SUMMARY')
     for msg in resultMessages:
-      print('    ' + msg)
+      print(f'    {msg}')
 
   return num_failures
 
@@ -434,9 +429,7 @@ def main(args):
   check_js_engines()
 
   def prepend_default(arg):
-    if arg.startswith('test_'):
-      return default_core_test_mode + '.' + arg
-    return arg
+    return f'{default_core_test_mode}.{arg}' if arg.startswith('test_') else arg
 
   tests = [prepend_default(t) for t in options.tests]
 
@@ -468,14 +461,7 @@ if __name__ == '__main__':
   except KeyboardInterrupt:
     logger.warning('KeyboardInterrupt')
     sys.exit(1)
-else:
-  # We are not the main process, and most likely a child process of
-  # the multiprocess pool.  In this mode the modifications made to the
-  # test class by `skip_test` need to be re-applied in each child
-  # subprocess (sad but true).  This is needed in particular on macOS
-  # and Windows where the default mode for multiprocessing is `spawn`
-  # rather than `fork`
-  if 'EMTEST_SKIP' in os.environ:
-    modules = get_and_import_modules()
-    for skip in os.environ['EMTEST_SKIP'].split():
-      skip_test(skip, modules)
+elif 'EMTEST_SKIP' in os.environ:
+  modules = get_and_import_modules()
+  for skip in os.environ['EMTEST_SKIP'].split():
+    skip_test(skip, modules)

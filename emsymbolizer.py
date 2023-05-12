@@ -44,17 +44,14 @@ class LocationInfo(object):
 
 
 def get_codesec_offset(module):
-  sec = module.get_section(webassembly.SecType.CODE)
-  if not sec:
+  if sec := module.get_section(webassembly.SecType.CODE):
+    return sec.offset
+  else:
     raise Error(f'No code section found in {module.filename}')
-  return sec.offset
 
 
 def has_debug_line_section(module):
-  for sec in module.sections():
-    if sec.name == ".debug_line":
-      return True
-  return False
+  return any(sec.name == ".debug_line" for sec in module.sections())
 
 
 def symbolize_address_dwarf(module, address):
@@ -73,7 +70,7 @@ def symbolize_address_dwarf(module, address):
   for i in range(0, len(out_lines), 2):
     func, loc_str = out_lines[i], out_lines[i + 1]
     m = SOURCE_LOC_RE.match(loc_str)
-    source, line, column = m.group(1), m.group(2), m.group(3)
+    source, line, column = m[1], m[2], m[3]
     if func == '??':
       func = None
     if source == '??':
@@ -82,10 +79,10 @@ def symbolize_address_dwarf(module, address):
 
 
 def get_sourceMappingURL_section(module):
-  for sec in module.sections():
-    if sec.name == "sourceMappingURL":
-      return sec
-  return None
+  return next(
+      (sec for sec in module.sections() if sec.name == "sourceMappingURL"),
+      None,
+  )
 
 
 class WasmSourceMap(object):

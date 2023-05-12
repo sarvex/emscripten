@@ -189,6 +189,6 @@ for testdir in get_tests():
       continue
     test_suffix = os.path.splitext(os.path.basename(test_file))[0]
     test_suffix = test_suffix.replace('-', '_')
-    test_name = 'test_' + basename + '_' + test_suffix
+    test_name = f'test_{basename}_{test_suffix}'
     setattr(posixtest, test_name, make_test(test_name, test_file, browser=False))
     setattr(test_posixtest_browser.posixtest_browser, test_name, make_test(test_name, test_file, browser=True))

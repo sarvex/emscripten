@@ -204,10 +204,7 @@ def main():
     MINIMAL_TASKS[:] = [t for t in MINIMAL_TASKS if 'emmalloc' not in t]
 
   do_build = args.operation == 'build'
-  do_clear = args.operation == 'clear'
-  if args.force:
-    do_clear = True
-
+  do_clear = True if args.force else args.operation == 'clear'
   system_libraries, system_tasks = get_system_tasks()
 
   # process tasks
@@ -243,16 +240,16 @@ def main():
       tasks.extend(targets)
 
   if auto_tasks:
-    print('Building targets: %s' % ' '.join(tasks))
+    print(f"Building targets: {' '.join(tasks)}")
 
   for what in tasks:
     for old, new in legacy_prefixes.items():
       if what.startswith(old):
         what = what.replace(old, new)
     if do_build:
-      logger.info('building ' + what)
+      logger.info(f'building {what}')
     else:
-      logger.info('clearing ' + what)
+      logger.info(f'clearing {what}')
     start_time = time.time()
     if what in system_libraries:
       library = system_libraries[what]
@@ -274,7 +271,7 @@ def main():
       if do_build:
         build_port(what)
     else:
-      logger.error('unfamiliar build target: ' + what)
+      logger.error(f'unfamiliar build target: {what}')
       return 1
 
     time_taken = time.time() - start_time

@@ -11,7 +11,7 @@ cases = ''
 i = 1
 incr = 1
 for _ in range(0, num_cases):
-  cases += '  case ' + str(i) + ': return "' + str(i) + str(i) + str(i) + '";\n'
+  cases += f'  case {str(i)}: return "{str(i)}{str(i)}{str(i)}' + '";\n'
   i += incr
   incr = (incr % 5) + 1
 

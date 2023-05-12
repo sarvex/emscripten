@@ -55,7 +55,7 @@ class ParallelTestSuite(unittest.BaseTestSuite):
     # multiprocessing.set_start_method('spawn')
     tests = list(self.reversed_tests())
     use_cores = cap_max_workers_in_pool(min(self.max_cores, len(tests), num_cores()))
-    print('Using %s parallel test processes' % use_cores)
+    print(f'Using {use_cores} parallel test processes')
     pool = multiprocessing.Pool(use_cores)
     results = [pool.apply_async(run_test, (t,)) for t in tests]
     results = [r.get() for r in results]
@@ -129,7 +129,7 @@ class BufferedParallelTestResult():
     self.buffered_result = BufferedTestUnexpectedSuccess(test)
 
   def addSkip(self, test, reason):
-    print(test, "... skipped '%s'" % reason, file=sys.stderr)
+    print(test, f"... skipped '{reason}'", file=sys.stderr)
     self.buffered_result = BufferedTestSkip(test, reason)
 
   def addFailure(self, test, err):
@@ -219,6 +219,4 @@ class FakeCode():
 
 
 def num_cores():
-  if NUM_CORES:
-    return int(NUM_CORES)
-  return multiprocessing.cpu_count()
+  return int(NUM_CORES) if NUM_CORES else multiprocessing.cpu_count()
